@@ -94,6 +94,16 @@ class DSDChunk(DSFChunk):
                     self.total_size, self.offset_metdata_chunk))
 
 
+def _points_into_file(fileobj, offset):
+    """The metadata pointer is read from the file and can be any 64 bit
+    value, so make sure it points into the file before using it as a
+    seek offset.
+    """
+
+    fileobj.seek(0, 2)
+    return 0 < offset <= fileobj.tell()
+
+
 class FormatChunk(DSFChunk):
 
     CHUNK_SIZE = 52
@@ -191,7 +201,7 @@ class _DSFID3(ID3):
     def _pre_load_header(self, fileobj):
         fileobj.seek(0)
         id3_location = DSDChunk(fileobj).offset_metdata_chunk
-        if id3_location == 0:
+        if not _points_into_file(fileobj, id3_location):
             raise ID3NoHeaderError("File has no existing ID3 tag")
 
         fileobj.seek(id3_location)
@@ -205,7 +215,7 @@ class _DSFID3(ID3):
         fileobj.seek(0)
 
         dsd_header = DSDChunk(fileobj)
-        if dsd_header.offset_metdata_chunk == 0:
+        if not _points_into_file(fileobj, dsd_header.offset_metdata_chunk):
             # create a new ID3 chunk at the end of the file
             fileobj.seek(0, 2)
 
@@ -344,9 +354,9 @@ def delete(filething):
     """
 
     dsf_file = DSFFile(filething.fileobj)
+    id3_location = dsf_file.dsd_chunk.offset_metdata_chunk
 
-    if dsf_file.dsd_chunk.offset_metdata_chunk != 0:
-        id3_location = dsf_file.dsd_chunk.offset_metdata_chunk
+    if _points_into_file(filething.fileobj, id3_location):
         dsf_file.dsd_chunk.offset_metdata_chunk = 0
         dsf_file.dsd_chunk.write()
 

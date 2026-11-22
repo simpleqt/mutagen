@@ -101,6 +101,34 @@ class TDSF(TestCase):
             h.write(b"\xff\xff")
         self.assertRaises(DSFError, DSF, self.filename_1)
 
+    def __set_metadata_pointer(self, filename, pointer):
+        with open(filename, "r+b") as h:
+            h.seek(20)
+            h.write(pointer.to_bytes(8, "little"))
+
+    def test_load_bogus_metadata_pointer(self):
+        # a pointer pointing outside of the file used to raise
+        # OverflowError/ValueError instead of loading without tags
+        for pointer in (2 ** 63 + 1, 2 ** 64 - 1):
+            self.__set_metadata_pointer(self.filename_2, pointer)
+            self.failUnless(DSF(self.filename_2).tags is None)
+
+    def test_save_bogus_metadata_pointer(self):
+        for pointer in (2 ** 63 + 1, 2 ** 64 - 1):
+            self.__set_metadata_pointer(self.filename_2, pointer)
+            dsf = DSF(self.filename_2)
+            self.failUnless(dsf.tags is None)
+            dsf.add_tags()
+            dsf.save()
+
+            dsf = DSF(self.filename_2)
+            self.failUnless(dsf.tags is not None)
+
+    def test_delete_bogus_metadata_pointer(self):
+        self.__set_metadata_pointer(self.filename_1, 2 ** 64 - 1)
+        delete(self.filename_1)
+        DSF(self.filename_1)
+
     def test_padding(self):
         DSF(self.filename_1).save()
         self.assertEqual(DSF(self.filename_1).tags._padding, 1024)
